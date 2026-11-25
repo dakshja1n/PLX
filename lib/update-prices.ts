@@ -194,6 +194,35 @@ export async function runUpdate(options: {
 
   if (log) console.log(`\n\nDone. Updated: ${updated}, Errors: ${errors}`)
 
+  // Mean reversion: only on abandoned pumps
+  // Conditions: price > market_value * 1.15 AND net_volume_7d < 0
+  const REVERSION_K = 0.03
+  const REVERSION_THRESHOLD = 1.15
+
+  const { data: allPlayers } = await supabase
+    .from('players')
+    .select('id, price, market_value, net_volume_7d')
+
+  let reverted = 0
+  for (const p of allPlayers ?? []) {
+    const price = Number(p.price)
+    const anchor = Number(p.market_value ?? 0)
+    const netVol = Number(p.net_volume_7d ?? 0)
+    if (anchor <= 0) continue
+    if (price > anchor * REVERSION_THRESHOLD && netVol < 0) {
+      const reversionDelta = -REVERSION_K * (price - anchor) / anchor
+      const newPrice = Math.max(price * (1 + reversionDelta), 0.01)
+      const roundedPrice = Math.round(newPrice * 100) / 100
+      await supabase
+        .from('players')
+        .update({ price: roundedPrice, updated_at: new Date().toISOString() })
+        .eq('id', p.id)
+      reverted++
+    }
+  }
+
+  if (log && reverted > 0) console.log(`Mean reversion applied: ${reverted} players`)
+
   // Liquidate underwater leveraged longs
   const { data: toLiquidate } = await supabase
     .from('holdings')
