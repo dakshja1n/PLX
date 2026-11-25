@@ -85,8 +85,9 @@ export function PortfolioPanel({ players, holdings, trades, shortPositions = [],
                 const value = h.shares * p.price
                 const pnl = value - h.shares * h.avgPrice
                 const pnlPct = ((p.price - h.avgPrice) / h.avgPrice) * 100
+                const nearLiq = h.liquidationPrice > 0 && p.price <= h.liquidationPrice * 1.15
                 return (
-                  <tr key={h.playerId} className="border-b border-border/60 last:border-0">
+                  <tr key={h.playerId} className={cn('border-b border-border/60 last:border-0', nearLiq && 'bg-amber-500/5 shadow-[inset_2px_0_0_0_theme(colors.amber.500)]')}>
                     <td className={cn(td, 'font-sans font-medium text-foreground')}>{p.name}</td>
                     <td className={cn(td, 'text-right tabular-nums')}>{h.shares}</td>
                     <td className={cn(td, 'text-right tabular-nums text-muted-foreground')}>{formatNumber(h.avgPrice)}</td>
@@ -98,7 +99,10 @@ export function PortfolioPanel({ players, holdings, trades, shortPositions = [],
                     </td>
                     <td className={cn(td, 'text-right tabular-nums')}>
                       {h.liquidationPrice > 0 ? (
-                        <span className="text-loss">{formatUSD(h.liquidationPrice)}</span>
+                        <>
+                          <span className="text-loss">{formatUSD(h.liquidationPrice)}</span>
+                          {nearLiq && <span className="ml-1.5 rounded-sm bg-amber-500/20 px-1 py-0.5 font-mono text-[9px] font-bold text-amber-400">NEAR LIQ</span>}
+                        </>
                       ) : '—'}
                     </td>
                     <td className={cn(td, 'text-right tabular-nums', pnl >= 0 ? 'text-gain' : 'text-loss')}>
@@ -146,13 +150,17 @@ export function PortfolioPanel({ players, holdings, trades, shortPositions = [],
                 if (!p) return null
                 const pnl = (s.openPrice - p.price) * s.shares
                 const pnlPct = ((s.openPrice - p.price) / s.openPrice) * 100
+                const nearLiq = p.price >= s.liquidationPrice * 0.85
                 return (
-                  <tr key={s.id} className="border-b border-border/60 last:border-0">
+                  <tr key={s.id} className={cn('border-b border-border/60 last:border-0', nearLiq && 'bg-amber-500/5 shadow-[inset_2px_0_0_0_theme(colors.amber.500)]')}>
                     <td className={cn(td, 'font-sans font-medium text-foreground')}>{p.name}</td>
                     <td className={cn(td, 'text-right tabular-nums')}>{s.shares}</td>
                     <td className={cn(td, 'text-right tabular-nums text-muted-foreground')}>{formatNumber(s.openPrice)}</td>
                     <td className={cn(td, 'text-right tabular-nums')}>{formatNumber(p.price)}</td>
-                    <td className={cn(td, 'text-right tabular-nums text-loss')}>{formatUSD(s.liquidationPrice)}</td>
+                    <td className={cn(td, 'text-right tabular-nums')}>
+                      <span className="text-loss">{formatUSD(s.liquidationPrice)}</span>
+                      {nearLiq && <span className="ml-1.5 rounded-sm bg-amber-500/20 px-1 py-0.5 font-mono text-[9px] font-bold text-amber-400">NEAR LIQ</span>}
+                    </td>
                     <td className={cn(td, 'text-right tabular-nums', pnl >= 0 ? 'text-gain' : 'text-loss')}>
                       {pnl >= 0 ? '+' : '-'}{formatUSD(Math.abs(pnl))} / {formatPct(pnlPct)}
                     </td>

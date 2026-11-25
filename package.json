@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "seed": "tsx scripts/seed-players.mjs",
-    "update-prices": "tsx scripts/update-prices.mjs"
+    "update-prices": "tsx scripts/update-prices.mjs",
+    "backfill-history": "node scripts/backfill-price-history.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
