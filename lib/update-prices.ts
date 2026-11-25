@@ -226,5 +226,45 @@ export async function runUpdate(options: {
 
   if (log && liquidations > 0) console.log(`Liquidated: ${liquidations} positions`)
 
+  // Snapshot each user's net worth into net_worth_history
+  const { data: portfolios } = await supabase
+    .from('portfolios')
+    .select('user_id, cash')
+
+  for (const portfolio of portfolios ?? []) {
+    const { data: userHoldings } = await supabase
+      .from('holdings')
+      .select('shares, borrowed_amount, players(price)')
+      .eq('user_id', portfolio.user_id)
+
+    const { data: userShorts } = await supabase
+      .from('short_positions')
+      .select('shares, open_price, players(price)')
+      .eq('user_id', portfolio.user_id)
+
+    let holdingsValue = 0
+    let borrowed = 0
+    for (const h of userHoldings ?? []) {
+      const price = Number((h.players as unknown as { price: number })?.price ?? 0)
+      holdingsValue += h.shares * price
+      borrowed += Number(h.borrowed_amount ?? 0)
+    }
+
+    let shortPnl = 0
+    for (const s of userShorts ?? []) {
+      const price = Number((s.players as unknown as { price: number })?.price ?? 0)
+      shortPnl += (s.open_price - price) * s.shares
+    }
+
+    const netWorth = Number(portfolio.cash) + holdingsValue - borrowed + shortPnl
+
+    await supabase.from('net_worth_history').insert({
+      user_id: portfolio.user_id,
+      net_worth: Math.round(netWorth * 100) / 100,
+    })
+  }
+
+  if (log) console.log(`Net worth snapshots: ${(portfolios ?? []).length} users`)
+
   return { updated, errors, date: today }
 }

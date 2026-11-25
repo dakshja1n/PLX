@@ -46,9 +46,9 @@ export type ShortPosition = {
   openedAt: string
 }
 
-export type Timeframe = '1D' | '1W' | '1M' | '1Y' | 'ALL'
+export type Timeframe = '7D' | '1M' | '3M' | '1Y' | 'ALL'
 
-export const TIMEFRAMES: Timeframe[] = ['1D', '1W', '1M', '1Y', 'ALL']
+export const TIMEFRAMES: Timeframe[] = ['7D', '1M', '3M', '1Y', 'ALL']
 
 export const FEE_RATE = 0.005
 export const INITIAL_CASH = 10_000
@@ -84,12 +84,12 @@ export const INITIAL_TRADES: Trade[] = [
   { id: 't-1001', timestamp: '2026-11-08 16:41:33', side: 'BUY', playerId: 'salah',   shares: 2, price: 84.00,  fee: 0.84, leverage: 1, status: 'FILLED' },
 ]
 
-const TIMEFRAME_CONFIG: Record<Timeframe, { points: number; volatility: number; label: (i: number) => string }> = {
-  '1D': { points: 48, volatility: 0.8,  label: (i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}` },
-  '1W': { points: 42, volatility: 2.0,  label: (i) => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][Math.floor(i / 6)] },
-  '1M': { points: 30, volatility: 4.0,  label: (i) => `Oct ${i + 3 > 31 ? i - 28 : i + 3}` },
-  '1Y': { points: 52, volatility: 8.0,  label: (i) => `W${i + 1}` },
-  ALL:  { points: 60, volatility: 15.0, label: (i) => `${2020 + Math.floor(i / 12)}` },
+const TIMEFRAME_CONFIG: Record<Timeframe, { points: number; volatility: number; label: (i: number, points: number) => string }> = {
+  '7D':  { points: 7,  volatility: 1.5,  label: (i, n) => { const d = new Date(); d.setDate(d.getDate() - (n - 1 - i)); return `${d.getMonth()+1}/${d.getDate()}` } },
+  '1M':  { points: 30, volatility: 3.0,  label: (i, n) => { const d = new Date(); d.setDate(d.getDate() - (n - 1 - i)); return `${d.getMonth()+1}/${d.getDate()}` } },
+  '3M':  { points: 90, volatility: 5.0,  label: (i, n) => { const d = new Date(); d.setDate(d.getDate() - (n - 1 - i)); return `${d.getMonth()+1}/${d.getDate()}` } },
+  '1Y':  { points: 52, volatility: 8.0,  label: (i) => { const d = new Date(); d.setDate(d.getDate() - (51 - i) * 7); return `${d.getMonth()+1}/${d.getDate()}` } },
+  ALL:   { points: 60, volatility: 15.0, label: (i) => { const d = new Date(); d.setMonth(d.getMonth() - (59 - i)); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}` } },
 }
 
 function seededRandom(seed: number) {
@@ -118,7 +118,7 @@ export function buildHistory(player: Player, timeframe: Timeframe): ChartPoint[]
   for (let i = steps.length - 1; i >= 0; i--) series.unshift(series[0] - steps[i])
 
   return series.map((price, i) => ({
-    label: label(i),
+    label: label(i, points),
     price: Math.round(price * 100) / 100,
   }))
 }

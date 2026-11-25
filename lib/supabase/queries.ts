@@ -129,3 +129,22 @@ export async function fetchPriceHistory(playerId: string, limit = 90) {
   if (error) throw error
   return (data ?? []) as { price: number; recorded_at: string }[]
 }
+
+export async function fetchNetWorthHistory(userId: string, limit = 30) {
+  const { data, error } = await supabase
+    .from('net_worth_history')
+    .select('net_worth, recorded_at')
+    .eq('user_id', userId)
+    .order('recorded_at', { ascending: true })
+    .limit(limit)
+  if (error) throw error
+  return (data ?? []) as { net_worth: number; recorded_at: string }[]
+}
+
+const TIMEFRAME_LIMIT: Record<string, number> = {
+  '7D': 7, '1M': 30, '3M': 90, '1Y': 365, 'ALL': 1000,
+}
+
+export function timeframeLimit(tf: string): number {
+  return TIMEFRAME_LIMIT[tf] ?? 90
+}

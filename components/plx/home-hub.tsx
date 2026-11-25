@@ -1,5 +1,6 @@
 import { ArrowRight, Lock } from 'lucide-react'
-import { type Holding, type Player, type ShortPosition, type Trade, formatPct, formatUSD } from '@/lib/market-data'
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { type ChartPoint, type Holding, type Player, type ShortPosition, type Trade, formatPct, formatUSD } from '@/lib/market-data'
 import { cn } from '@/lib/utils'
 import { MODES, type ModeId } from './modes'
 import { PortfolioPanel } from './portfolio-panel'
@@ -13,12 +14,13 @@ type HomeHubProps = {
   holdingsValue: number
   pnl24h: number
   displayName: string
+  netWorthHistory: ChartPoint[]
   onModeChange: (mode: ModeId) => void
   onQuickSell: (playerId: string) => void
   onQuickCover: (playerId: string) => void
 }
 
-export function HomeHub({ players, holdings, trades, shortPositions, cash, holdingsValue, pnl24h, displayName, onModeChange, onQuickSell, onQuickCover }: HomeHubProps) {
+export function HomeHub({ players, holdings, trades, shortPositions, cash, holdingsValue, pnl24h, displayName, netWorthHistory, onModeChange, onQuickSell, onQuickCover }: HomeHubProps) {
   const netWorth = cash + holdingsValue
   const pnlPct = holdingsValue - pnl24h > 0 ? (pnl24h / (holdingsValue - pnl24h)) * 100 : 0
   const gameModes = MODES.filter((m) => m.id !== 'home')
@@ -55,6 +57,29 @@ export function HomeHub({ players, holdings, trades, shortPositions, cash, holdi
             </div>
           ))}
         </dl>
+        {netWorthHistory.length >= 2 && (
+          <div className="w-full h-20 mt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={netWorthHistory} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="nwFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="label" hide />
+                <YAxis domain={['dataMin - 100', 'dataMax + 100']} hide />
+                <Tooltip
+                  contentStyle={{ background: '#090d16', border: '1px solid #253045', borderRadius: 6, fontFamily: 'var(--font-geist-mono)', fontSize: 11 }}
+                  labelStyle={{ color: '#8391a7' }}
+                  itemStyle={{ color: '#22c55e' }}
+                  formatter={(v) => [formatUSD(Number(v)), 'Net Worth']}
+                />
+                <Area type="monotone" dataKey="price" stroke="#22c55e" strokeWidth={1.5} fill="url(#nwFill)" dot={false} isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </section>
 
       <section aria-label="Game modes" className="grid shrink-0 grid-cols-2 gap-3">

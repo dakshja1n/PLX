@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { coverShort, executeTrade, fetchHoldings, fetchPlayers, fetchPortfolio, fetchProfile, fetchPriceHistory, fetchShortPositions, fetchTrades, openShort } from '@/lib/supabase/queries'
+import { coverShort, executeTrade, fetchHoldings, fetchNetWorthHistory, fetchPlayers, fetchPortfolio, fetchProfile, fetchPriceHistory, fetchShortPositions, fetchTrades, openShort, timeframeLimit } from '@/lib/supabase/queries'
 import {
   INITIAL_PLAYERS,
   type ChartPoint,
@@ -84,10 +84,11 @@ export function TradingDesk() {
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [shortPositions, setShortPositions] = useState<ShortPosition[]>([])
   const [trades, setTrades] = useState<Trade[]>([])
+  const [netWorthHistory, setNetWorthHistory] = useState<ChartPoint[]>([])
   const [side, setSide] = useState<TradeSide>('BUY')
   const [sharesInput, setSharesInput] = useState('1')
   const [leverage, setLeverage] = useState(1)
-  const [timeframe, setTimeframe] = useState<Timeframe>('1D')
+  const [timeframe, setTimeframe] = useState<Timeframe>('7D')
   const [notice, setNotice] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState<string>('Trader')
@@ -95,17 +96,18 @@ export function TradingDesk() {
   const [priceHistoryCache, setPriceHistoryCache] = useState<Map<string, ChartPoint[]>>(new Map())
   const fetchingHistory = useRef<Set<string>>(new Set())
 
-  const loadPriceHistory = useCallback(async (playerId: string) => {
-    if (fetchingHistory.current.has(playerId)) return
-    fetchingHistory.current.add(playerId)
+  const loadPriceHistory = useCallback(async (playerId: string, tf: string) => {
+    const cacheKey = `${playerId}:${tf}`
+    if (fetchingHistory.current.has(cacheKey)) return
+    fetchingHistory.current.add(cacheKey)
     try {
-      const rows = await fetchPriceHistory(playerId, 90)
+      const rows = await fetchPriceHistory(playerId, timeframeLimit(tf))
       if (rows.length >= 2) {
         const points: ChartPoint[] = rows.map(r => ({
           label: r.recorded_at.slice(0, 10),
           price: Number(r.price),
         }))
-        setPriceHistoryCache(prev => new Map(prev).set(playerId, points))
+        setPriceHistoryCache(prev => new Map(prev).set(cacheKey, points))
       }
     } catch {
       // fall back to generated data
@@ -114,12 +116,13 @@ export function TradingDesk() {
 
   const reload = useCallback(async (uid: string) => {
     try {
-      const [dbPlayers, portfolio, dbHoldings, dbTrades, dbShorts] = await Promise.all([
+      const [dbPlayers, portfolio, dbHoldings, dbTrades, dbShorts, nwRows] = await Promise.all([
         fetchPlayers(),
         fetchPortfolio(uid),
         fetchHoldings(uid),
         fetchTrades(uid),
         fetchShortPositions(uid),
+        fetchNetWorthHistory(uid, 30),
       ])
       if (dbPlayers && dbPlayers.length > 0) {
         const mapped = dbPlayers.map(dbPlayerToPlayer)
@@ -130,6 +133,7 @@ export function TradingDesk() {
       setHoldings((dbHoldings ?? []).map(dbHoldingToHolding))
       setTrades((dbTrades ?? []).map(dbTradeToTrade))
       setShortPositions((dbShorts ?? []).map(dbShortToShort))
+      setNetWorthHistory(nwRows.map(r => ({ label: r.recorded_at.slice(0, 10), price: r.net_worth })))
     } catch {
       // keep seed data if DB not yet set up
     }
@@ -165,10 +169,10 @@ export function TradingDesk() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  // Load real price history when player changes
+  // Load real price history when player or timeframe changes
   useEffect(() => {
-    if (selectedId) loadPriceHistory(selectedId)
-  }, [selectedId, loadPriceHistory])
+    if (selectedId) loadPriceHistory(selectedId, timeframe)
+  }, [selectedId, timeframe, loadPriceHistory])
 
   const player = players.find((p) => p.id === selectedId) ?? players[0]
   const ownedShares = holdings.find((h) => h.playerId === player?.id)?.shares ?? 0
@@ -244,7 +248,7 @@ export function TradingDesk() {
   if (!player) return null
 
   // Use generated chart history (no DB history yet)
-  const priceHistory = priceHistoryCache.get(player.id) ?? buildHistory(player, timeframe)
+  const priceHistory = priceHistoryCache.get(`${player.id}:${timeframe}`) ?? buildHistory(player, timeframe)
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background font-sans text-foreground">
@@ -260,6 +264,7 @@ export function TradingDesk() {
             holdingsValue={holdingsValue}
             pnl24h={pnl24h}
             displayName={displayName}
+            netWorthHistory={netWorthHistory}
             onModeChange={setMode}
             onQuickSell={quickSell}
             onQuickCover={quickCover}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Search, ChevronDown, ArrowUpDown } from 'lucide-react'
 import { type Player, changePct, formatNumber, formatPct } from '@/lib/market-data'
 import { cn } from '@/lib/utils'
@@ -15,6 +15,7 @@ type MarketBoardProps = {
 const POSITIONS = ['All', 'GK', 'DEF', 'MID', 'FWD'] as const
 type PositionFilter = typeof POSITIONS[number]
 type SortKey = 'price' | 'change' | 'name'
+type FlashDir = 'up' | 'down'
 
 export function MarketBoard({ players, selectedId, onSelect }: MarketBoardProps) {
   const [query, setQuery]       = useState('')
@@ -23,6 +24,42 @@ export function MarketBoard({ players, selectedId, onSelect }: MarketBoardProps)
   const [sortKey, setSortKey]   = useState<SortKey>('price')
   const [sortAsc, setSortAsc]   = useState(false)
   const [clubOpen, setClubOpen] = useState(false)
+  const [flashMap, setFlashMap] = useState<Map<string, FlashDir>>(new Map())
+  const prevPrices = useRef<Map<string, number>>(new Map())
+  const flashTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  // Detect price changes and trigger flash
+  useEffect(() => {
+    const newFlash = new Map<string, FlashDir>()
+    for (const p of players) {
+      const prev = prevPrices.current.get(p.id)
+      if (prev !== undefined && prev !== p.price) {
+        newFlash.set(p.id, p.price > prev ? 'up' : 'down')
+      }
+      prevPrices.current.set(p.id, p.price)
+    }
+    if (newFlash.size === 0) return
+
+    setFlashMap(prev => {
+      const next = new Map(prev)
+      for (const [id, dir] of newFlash) next.set(id, dir)
+      return next
+    })
+
+    for (const id of newFlash.keys()) {
+      const existing = flashTimers.current.get(id)
+      if (existing) clearTimeout(existing)
+      const timer = setTimeout(() => {
+        setFlashMap(prev => {
+          const next = new Map(prev)
+          next.delete(id)
+          return next
+        })
+        flashTimers.current.delete(id)
+      }, 1500)
+      flashTimers.current.set(id, timer)
+    }
+  }, [players])
 
   const clubs = useMemo(() => {
     const set = new Set(players.map(p => p.club))
@@ -158,6 +195,7 @@ export function MarketBoard({ players, selectedId, onSelect }: MarketBoardProps)
             {filtered.map(p => {
               const pct = changePct(p)
               const selected = p.id === selectedId
+              const flash = flashMap.get(p.id)
               return (
                 <tr
                   key={p.id}
@@ -181,7 +219,10 @@ export function MarketBoard({ players, selectedId, onSelect }: MarketBoardProps)
                       </span>
                     </button>
                   </td>
-                  <td className="px-1.5 py-2 text-right font-mono text-sm whitespace-nowrap text-foreground tabular-nums">
+                  <td className={cn(
+                    'px-1.5 py-2 text-right font-mono text-sm whitespace-nowrap tabular-nums transition-colors duration-300',
+                    flash === 'up' ? 'text-gain' : flash === 'down' ? 'text-loss' : 'text-foreground',
+                  )}>
                     {formatNumber(p.price)}
                   </td>
                   <td className={cn('px-1.5 py-2 text-right font-mono text-xs whitespace-nowrap tabular-nums', pct >= 0 ? 'text-gain' : 'text-loss')}>
