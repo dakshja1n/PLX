@@ -194,6 +194,69 @@ export async function runUpdate(options: {
 
   if (log) console.log(`\n\nDone. Updated: ${updated}, Errors: ${errors}`)
 
+  // Demand nudge: apply accumulated buy/sell pressure from the day's trades
+  const NUDGE_PER_SHARE = 0.001
+  const NUDGE_CAP = 0.05
+  const dayStart = new Date()
+  dayStart.setUTCHours(0, 0, 0, 0)
+
+  const { data: dayTrades } = await supabase
+    .from('trades')
+    .select('player_id, side, shares')
+    .gte('executed_at', dayStart.toISOString())
+    .in('side', ['BUY', 'SELL', 'SHORT', 'COVER'])
+
+  const volumeMap = new Map<string, number>()
+  for (const t of dayTrades ?? []) {
+    const isBuy = t.side === 'BUY' || t.side === 'COVER'
+    const delta = isBuy ? t.shares : -t.shares
+    volumeMap.set(t.player_id, (volumeMap.get(t.player_id) ?? 0) + delta)
+  }
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const affectedIds = Array.from(volumeMap.keys())
+
+  if (affectedIds.length > 0) {
+    const { data: weekTrades } = await supabase
+      .from('trades')
+      .select('player_id, side, shares')
+      .gte('executed_at', sevenDaysAgo)
+      .in('player_id', affectedIds)
+      .in('side', ['BUY', 'SELL', 'SHORT', 'COVER'])
+
+    const weekVolumeMap = new Map<string, number>()
+    for (const t of weekTrades ?? []) {
+      const isBuy = t.side === 'BUY' || t.side === 'COVER'
+      const delta = isBuy ? t.shares : -t.shares
+      weekVolumeMap.set(t.player_id, (weekVolumeMap.get(t.player_id) ?? 0) + delta)
+    }
+
+    const { data: affectedPlayers } = await supabase
+      .from('players')
+      .select('id, price, price_change_24h')
+      .in('id', affectedIds)
+
+    for (const p of affectedPlayers ?? []) {
+      const netShares = volumeMap.get(p.id) ?? 0
+      if (netShares === 0) continue
+      const rawPct = netShares * NUDGE_PER_SHARE
+      const nudgePct = Math.max(-NUDGE_CAP, Math.min(NUDGE_CAP, rawPct))
+      const newPrice = Math.max(Number(p.price) * (1 + nudgePct), 0.01)
+      const roundedPrice = Math.round(newPrice * 100) / 100
+      const priceDiff = roundedPrice - Number(p.price)
+      await supabase
+        .from('players')
+        .update({
+          price: roundedPrice,
+          price_change_24h: Math.round((Number(p.price_change_24h) + priceDiff) * 100) / 100,
+          net_volume_7d: weekVolumeMap.get(p.id) ?? 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', p.id)
+    }
+    if (log) console.log(`Demand nudge applied: ${affectedIds.length} players`)
+  }
+
   // Mean reversion: only on abandoned pumps
   // Conditions: price > market_value * 1.15 AND net_volume_7d < 0
   const REVERSION_K = 0.03
