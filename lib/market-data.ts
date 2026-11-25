@@ -17,9 +17,12 @@ export type Holding = {
   playerId: string
   shares: number
   avgPrice: number
+  leverage: number
+  borrowedAmount: number
+  liquidationPrice: number
 }
 
-export type TradeSide = 'BUY' | 'SELL'
+export type TradeSide = 'BUY' | 'SELL' | 'SHORT' | 'COVER'
 
 export type Trade = {
   id: string
@@ -29,7 +32,18 @@ export type Trade = {
   shares: number
   price: number
   fee: number
+  leverage: number
   status: 'FILLED' | 'REJECTED'
+}
+
+export type ShortPosition = {
+  id: string
+  playerId: string
+  shares: number
+  openPrice: number
+  collateral: number
+  liquidationPrice: number
+  openedAt: string
 }
 
 export type Timeframe = '1D' | '1W' | '1M' | '1Y' | 'ALL'
@@ -60,14 +74,14 @@ export const INITIAL_PLAYERS: Player[] = seeds.map(({ change24h, ...p }) => ({
 }))
 
 export const INITIAL_HOLDINGS: Holding[] = [
-  { playerId: 'salah',   shares: 5, avgPrice: 82.50 },
-  { playerId: 'haaland', shares: 2, avgPrice: 175.00 },
+  { playerId: 'salah',   shares: 5, avgPrice: 82.50,  leverage: 1, borrowedAmount: 0, liquidationPrice: 0 },
+  { playerId: 'haaland', shares: 2, avgPrice: 175.00, leverage: 1, borrowedAmount: 0, liquidationPrice: 0 },
 ]
 
 export const INITIAL_TRADES: Trade[] = [
-  { id: 't-1003', timestamp: '2026-11-10 14:22:09', side: 'BUY', playerId: 'haaland', shares: 2, price: 175.00, fee: 1.75, status: 'FILLED' },
-  { id: 't-1002', timestamp: '2026-11-09 10:05:55', side: 'BUY', playerId: 'salah',   shares: 3, price: 81.00,  fee: 1.22, status: 'FILLED' },
-  { id: 't-1001', timestamp: '2026-11-08 16:41:33', side: 'BUY', playerId: 'salah',   shares: 2, price: 84.00,  fee: 0.84, status: 'FILLED' },
+  { id: 't-1003', timestamp: '2026-11-10 14:22:09', side: 'BUY', playerId: 'haaland', shares: 2, price: 175.00, fee: 1.75, leverage: 1, status: 'FILLED' },
+  { id: 't-1002', timestamp: '2026-11-09 10:05:55', side: 'BUY', playerId: 'salah',   shares: 3, price: 81.00,  fee: 1.22, leverage: 1, status: 'FILLED' },
+  { id: 't-1001', timestamp: '2026-11-08 16:41:33', side: 'BUY', playerId: 'salah',   shares: 2, price: 84.00,  fee: 0.84, leverage: 1, status: 'FILLED' },
 ]
 
 const TIMEFRAME_CONFIG: Record<Timeframe, { points: number; volatility: number; label: (i: number) => string }> = {

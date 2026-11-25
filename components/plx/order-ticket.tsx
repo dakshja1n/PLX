@@ -1,7 +1,7 @@
 'use client'
 
 import { CircleCheck, TriangleAlert, Wallet } from 'lucide-react'
-import { FEE_RATE, type Player, type TradeSide, formatUSD } from '@/lib/market-data'
+import { FEE_RATE, type Player, type ShortPosition, type TradeSide, formatUSD } from '@/lib/market-data'
 import { cn } from '@/lib/utils'
 
 type OrderTicketProps = {
@@ -10,8 +10,11 @@ type OrderTicketProps = {
   onSideChange: (side: TradeSide) => void
   sharesInput: string
   onSharesChange: (value: string) => void
+  leverage: number
+  onLeverageChange: (lev: number) => void
   cash: number
   ownedShares: number
+  shortPositions: ShortPosition[]
   onExecute: () => void
   notice: string | null
 }
@@ -23,43 +26,71 @@ const PRESETS = [
   { label: 'MAX', ratio: 1 },
 ]
 
+const LEVERAGE_OPTIONS = [1, 2, 3, 5]
+
 export function OrderTicket({
   player,
   side,
   onSideChange,
   sharesInput,
   onSharesChange,
+  leverage,
+  onLeverageChange,
   cash,
   ownedShares,
+  shortPositions,
   onExecute,
   notice,
 }: OrderTicketProps) {
-  const isBuy = side === 'BUY'
-  const isSell = side === 'SELL'
-  const locked = player.status === 'injured' || player.status === 'suspended'
+  const isBuy   = side === 'BUY'
+  const isSell  = side === 'SELL'
+  const isShort = side === 'SHORT'
+  const isCover = side === 'COVER'
+  const locked  = player.status === 'injured' || player.status === 'suspended'
+
   const shares = Number.parseInt(sharesInput, 10)
   const validShares = Number.isFinite(shares) && shares > 0 ? shares : 0
 
-  const notional = validShares * player.price
-  const fee = notional * FEE_RATE
-  const cashNeeded = isBuy ? notional + fee : 0
-  const netProceeds = isSell ? notional - fee : 0
+  const notional   = validShares * player.price
+  const equity     = notional / leverage
+  const borrowed   = notional - equity
+  const fee        = notional * FEE_RATE
+  const liqPrice   = leverage > 1 ? player.price * (1 - 1 / leverage) * 0.95 : 0
 
-  const maxBuyable = Math.floor(cash / (player.price * (1 + FEE_RATE)))
-  const capacity = isBuy ? maxBuyable : ownedShares
+  // SHORT: collateral = notional, user nets notional − fee (pays fee)
+  const shortCollateral = isShort ? notional + fee : 0
+
+  // COVER: total cost = current notional + fee
+  const coverCost = isCover ? notional + fee : 0
+
+  const maxBuyable  = Math.floor(cash / (player.price / leverage * (1 + FEE_RATE)))
+  const maxShortable = Math.floor(cash / (player.price * (1 + FEE_RATE)))
+  const coverable   = shortPositions.reduce((sum, sp) => sum + sp.shares, 0)
+
+  let capacity = 0
+  if (isBuy)   capacity = maxBuyable
+  if (isSell)  capacity = ownedShares
+  if (isShort) capacity = maxShortable
+  if (isCover) capacity = coverable
 
   let error: string | null = null
   if (validShares > 0) {
-    if (isBuy && cashNeeded > cash) error = 'Insufficient cash for this order.'
-    if (isSell && validShares > ownedShares) error = `You only own ${ownedShares} share${ownedShares === 1 ? '' : 's'}.`
+    if (isBuy   && cash < equity + fee)         error = 'Insufficient cash for this order.'
+    if (isSell  && validShares > ownedShares)   error = `You only own ${ownedShares} share${ownedShares === 1 ? '' : 's'}.`
+    if (isShort && cash < shortCollateral)      error = 'Insufficient cash for collateral.'
+    if (isCover && validShares > coverable)     error = `You only have ${coverable} shorted share${coverable === 1 ? '' : 's'}.`
   }
 
   const canExecute = !locked && validShares > 0 && !error
 
-  const sideTabs: { id: TradeSide; label: string }[] = [
-    { id: 'BUY', label: 'Buy' },
-    { id: 'SELL', label: 'Sell' },
+  const sideTabs: { id: TradeSide; label: string; color: string }[] = [
+    { id: 'BUY',   label: 'Buy',   color: 'bg-gain text-primary-foreground' },
+    { id: 'SELL',  label: 'Sell',  color: 'bg-loss text-white' },
+    { id: 'SHORT', label: 'Short', color: 'bg-amber-500 text-white' },
+    { id: 'COVER', label: 'Cover', color: 'bg-sky-500 text-white' },
   ]
+
+  const activeBtnColor = sideTabs.find(t => t.id === side)?.color ?? ''
 
   return (
     <section className="flex flex-col rounded-lg border border-border bg-card" aria-labelledby="order-ticket-title">
@@ -71,12 +102,9 @@ export function OrderTicket({
       </div>
 
       <div className="flex flex-col gap-3 p-3">
-        <div
-          className="grid grid-cols-2 rounded-md border border-border bg-background p-1"
-          role="tablist"
-          aria-label="Order side"
-        >
-          {sideTabs.map(({ id, label }) => {
+        {/* Side tabs — 2×2 grid */}
+        <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-background p-1" role="tablist" aria-label="Order side">
+          {sideTabs.map(({ id, label, color }) => {
             const active = side === id
             return (
               <button
@@ -86,10 +114,8 @@ export function OrderTicket({
                 aria-selected={active}
                 onClick={() => onSideChange(id)}
                 className={cn(
-                  'rounded-sm py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  active && id === 'BUY' && 'bg-gain text-primary-foreground',
-                  active && id === 'SELL' && 'bg-loss text-white',
-                  !active && 'text-muted-foreground hover:text-foreground',
+                  'rounded-sm py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  active ? color : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 {label}
@@ -98,22 +124,48 @@ export function OrderTicket({
           })}
         </div>
 
+        {/* Leverage selector — only for BUY and SHORT */}
+        {(isBuy || isShort) && (
+          <div>
+            <p className="mb-1.5 font-mono text-[10px] tracking-widest text-muted-foreground">LEVERAGE</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              {LEVERAGE_OPTIONS.map((lev) => (
+                <button
+                  key={lev}
+                  type="button"
+                  onClick={() => onLeverageChange(lev)}
+                  className={cn(
+                    'rounded-sm border py-1.5 font-mono text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    leverage === lev
+                      ? 'border-foreground bg-foreground text-background'
+                      : 'border-border bg-secondary text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {lev === 1 ? '1×' : `${lev}×`}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Balance row */}
         <div className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2.5">
           <span className="flex items-center gap-2 text-xs text-muted-foreground">
             <Wallet className="size-4" aria-hidden="true" />
-            {isSell ? 'Shares Owned' : 'Available Cash'}
+            {isSell ? 'Shares Owned' : isCover ? 'Shorted Shares' : 'Available Cash'}
           </span>
           <span className="font-mono text-sm font-semibold text-foreground tabular-nums">
             {isSell ? (
-              `${ownedShares} ${ownedShares === 1 ? 'share' : 'shares'}`
+              `${ownedShares} share${ownedShares === 1 ? '' : 's'}`
+            ) : isCover ? (
+              `${coverable} share${coverable === 1 ? '' : 's'}`
             ) : (
-              <>
-                {formatUSD(cash)} <span className="text-[10px] text-muted-foreground">USD</span>
-              </>
+              <>{formatUSD(cash)} <span className="text-[10px] text-muted-foreground">USD</span></>
             )}
           </span>
         </div>
 
+        {/* Shares input */}
         <div>
           <label htmlFor="share-qty" className="mb-1.5 block font-mono text-[10px] tracking-widest text-muted-foreground">
             NUMBER OF SHARES
@@ -131,7 +183,7 @@ export function OrderTicket({
             aria-describedby="share-capacity"
           />
           <p id="share-capacity" className="mt-1 font-mono text-[10px] text-muted-foreground">
-            Max {isSell ? 'sellable' : 'buyable'}: {capacity}
+            Max: {capacity}
           </p>
           <div className="mt-2 grid grid-cols-4 gap-1.5">
             {PRESETS.map(({ label, ratio }) => (
@@ -147,21 +199,61 @@ export function OrderTicket({
           </div>
         </div>
 
+        {/* Summary rows */}
         <dl className="flex flex-col gap-2 rounded-md border border-border bg-background p-3 font-mono text-xs">
           <div className="flex justify-between">
             <dt className="text-muted-foreground">Share Price</dt>
-            <dd className="text-foreground tabular-nums">{formatUSD(player.price)} / share</dd>
+            <dd className="tabular-nums">{formatUSD(player.price)} / share</dd>
           </div>
+
+          {(isBuy || isShort) && leverage > 1 && (
+            <>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Notional</dt>
+                <dd className="tabular-nums">{formatUSD(notional)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Your Equity ({Math.round(100 / leverage)}%)</dt>
+                <dd className="tabular-nums">{formatUSD(equity)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Borrowed</dt>
+                <dd className="tabular-nums text-amber-400">{formatUSD(borrowed)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Liq. Price</dt>
+                <dd className="tabular-nums text-loss">{formatUSD(liqPrice)}</dd>
+              </div>
+            </>
+          )}
+
+          {isShort && (
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Liq. Price</dt>
+              <dd className="tabular-nums text-loss">{formatUSD(player.price * 1.5)}</dd>
+            </div>
+          )}
+
           <div className="flex justify-between">
-            <dt className="text-muted-foreground">Est. Platform Fee (0.50%)</dt>
-            <dd className="text-foreground tabular-nums">{formatUSD(fee)}</dd>
+            <dt className="text-muted-foreground">Platform Fee (0.50%)</dt>
+            <dd className="tabular-nums">{formatUSD(fee)}</dd>
           </div>
+
           <div className="mt-1 flex items-center justify-between border-t border-border pt-2.5">
             <dt className="font-semibold text-foreground">
-              {isBuy ? 'You Pay' : 'Net Proceeds'}
+              {isBuy   && 'You Pay'}
+              {isSell  && 'Net Proceeds'}
+              {isShort && 'Collateral Required'}
+              {isCover && 'You Pay'}
             </dt>
-            <dd className={cn('text-base font-bold tabular-nums', isBuy ? 'text-gain' : 'text-loss')}>
-              {formatUSD(isBuy ? cashNeeded : netProceeds)}
+            <dd className={cn(
+              'text-base font-bold tabular-nums',
+              (isBuy || isShort || isCover) ? 'text-gain' : 'text-loss',
+            )}>
+              {isBuy   && formatUSD(equity + fee)}
+              {isSell  && formatUSD(notional - fee)}
+              {isShort && formatUSD(shortCollateral)}
+              {isCover && formatUSD(coverCost)}
             </dd>
           </div>
         </dl>
@@ -183,10 +275,13 @@ export function OrderTicket({
           disabled={!canExecute}
           className={cn(
             'h-11 rounded-md text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:opacity-40',
-            isBuy ? 'bg-gain text-primary-foreground hover:bg-gain/90' : 'bg-loss text-white hover:bg-loss/90',
+            activeBtnColor || 'bg-gain text-primary-foreground',
           )}
         >
-          {isBuy ? 'Execute Buy Order' : 'Execute Sell Order'}
+          {isBuy   && `Execute Buy${leverage > 1 ? ` ${leverage}×` : ''}`}
+          {isSell  && 'Execute Sell'}
+          {isShort && 'Open Short'}
+          {isCover && 'Cover Short'}
         </button>
 
         <div aria-live="polite" className="min-h-4">

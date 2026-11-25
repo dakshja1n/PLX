@@ -1,28 +1,38 @@
 'use client'
 
 import { useState } from 'react'
-import { Briefcase, History } from 'lucide-react'
-import { type Holding, type Player, type Trade, formatNumber, formatPct, formatUSD } from '@/lib/market-data'
+import { Briefcase, History, TrendingDown } from 'lucide-react'
+import { type Holding, type Player, type ShortPosition, type Trade, formatNumber, formatPct, formatUSD } from '@/lib/market-data'
 import { cn } from '@/lib/utils'
 
 type PortfolioPanelProps = {
   players: Player[]
   holdings: Holding[]
   trades: Trade[]
+  shortPositions?: ShortPosition[]
   onQuickSell: (playerId: string) => void
+  onQuickCover?: (playerId: string) => void
   title?: string
 }
 
 const th = 'px-4 py-2 font-medium whitespace-nowrap'
 const td = 'px-4 py-2 whitespace-nowrap'
 
-export function PortfolioPanel({ players, holdings, trades, onQuickSell, title }: PortfolioPanelProps) {
-  const [tab, setTab] = useState<'holdings' | 'audit'>('holdings')
+const SIDE_COLOR: Record<string, string> = {
+  BUY:   'bg-gain/15 text-gain',
+  SELL:  'bg-loss/15 text-loss',
+  SHORT: 'bg-amber-500/15 text-amber-400',
+  COVER: 'bg-sky-500/15 text-sky-400',
+}
+
+export function PortfolioPanel({ players, holdings, trades, shortPositions = [], onQuickSell, onQuickCover, title }: PortfolioPanelProps) {
+  const [tab, setTab] = useState<'holdings' | 'shorts' | 'audit'>('holdings')
   const byId = new Map(players.map((p) => [p.id, p]))
 
   const tabs = [
-    { id: 'holdings' as const, label: 'Holdings', icon: Briefcase, count: holdings.length },
-    { id: 'audit' as const, label: 'Recent Trades Audit Log', icon: History, count: trades.length },
+    { id: 'holdings' as const, label: 'Holdings',      icon: Briefcase,    count: holdings.length },
+    { id: 'shorts'   as const, label: 'Short Positions', icon: TrendingDown, count: shortPositions.length },
+    { id: 'audit'    as const, label: 'Audit Log',      icon: History,       count: trades.length },
   ]
 
   return (
@@ -53,7 +63,8 @@ export function PortfolioPanel({ players, holdings, trades, onQuickSell, title }
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto [&_thead]:sticky [&_thead]:top-0 [&_thead]:bg-card">
-        {tab === 'holdings' ? (
+
+        {tab === 'holdings' && (
           <table id="panel-holdings" role="tabpanel" aria-labelledby="tab-holdings" className="w-full text-left">
             <thead>
               <tr className="border-b border-border font-mono text-[10px] tracking-wider text-muted-foreground">
@@ -61,9 +72,10 @@ export function PortfolioPanel({ players, holdings, trades, onQuickSell, title }
                 <th scope="col" className={cn(th, 'text-right')}>SHARES</th>
                 <th scope="col" className={cn(th, 'text-right')}>AVG COST</th>
                 <th scope="col" className={cn(th, 'text-right')}>CURRENT</th>
-                <th scope="col" className={cn(th, 'text-right')}>VALUE</th>
+                <th scope="col" className={cn(th, 'text-right')}>LEVERAGE</th>
+                <th scope="col" className={cn(th, 'text-right')}>LIQ. PRICE</th>
                 <th scope="col" className={cn(th, 'text-right')}>UNREALIZED P&amp;L</th>
-                <th scope="col" className={cn(th, 'text-right')}>QUICK ACTION</th>
+                <th scope="col" className={cn(th, 'text-right')}>ACTION</th>
               </tr>
             </thead>
             <tbody className="font-mono text-sm">
@@ -71,7 +83,7 @@ export function PortfolioPanel({ players, holdings, trades, onQuickSell, title }
                 const p = byId.get(h.playerId)
                 if (!p) return null
                 const value = h.shares * p.price
-                const pnl = value - (h.shares * h.avgPrice)
+                const pnl = value - h.shares * h.avgPrice
                 const pnlPct = ((p.price - h.avgPrice) / h.avgPrice) * 100
                 return (
                   <tr key={h.playerId} className="border-b border-border/60 last:border-0">
@@ -79,17 +91,24 @@ export function PortfolioPanel({ players, holdings, trades, onQuickSell, title }
                     <td className={cn(td, 'text-right tabular-nums')}>{h.shares}</td>
                     <td className={cn(td, 'text-right tabular-nums text-muted-foreground')}>{formatNumber(h.avgPrice)}</td>
                     <td className={cn(td, 'text-right tabular-nums')}>{formatNumber(p.price)}</td>
-                    <td className={cn(td, 'text-right tabular-nums text-foreground')}>{formatUSD(value)}</td>
+                    <td className={cn(td, 'text-right tabular-nums')}>
+                      {h.leverage > 1 ? (
+                        <span className="text-amber-400">{h.leverage}×</span>
+                      ) : '1×'}
+                    </td>
+                    <td className={cn(td, 'text-right tabular-nums')}>
+                      {h.liquidationPrice > 0 ? (
+                        <span className="text-loss">{formatUSD(h.liquidationPrice)}</span>
+                      ) : '—'}
+                    </td>
                     <td className={cn(td, 'text-right tabular-nums', pnl >= 0 ? 'text-gain' : 'text-loss')}>
-                      {pnl >= 0 ? '+' : '-'}
-                      {formatUSD(Math.abs(pnl))} / {formatPct(pnlPct)}
+                      {pnl >= 0 ? '+' : '-'}{formatUSD(Math.abs(pnl))} / {formatPct(pnlPct)}
                     </td>
                     <td className={cn(td, 'text-right')}>
                       <button
                         type="button"
                         onClick={() => onQuickSell(h.playerId)}
                         className="rounded-sm border border-loss/40 bg-loss/10 px-3 py-1 font-sans text-xs font-semibold text-loss transition-colors hover:bg-loss/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={`Sell ${p.name} shares`}
                       >
                         Sell
                       </button>
@@ -99,14 +118,68 @@ export function PortfolioPanel({ players, holdings, trades, onQuickSell, title }
               })}
               {holdings.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center font-sans text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-8 text-center font-sans text-sm text-muted-foreground">
                     No open positions. Buy shares from the order ticket to get started.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : (
+        )}
+
+        {tab === 'shorts' && (
+          <table id="panel-shorts" role="tabpanel" aria-labelledby="tab-shorts" className="w-full text-left">
+            <thead>
+              <tr className="border-b border-border font-mono text-[10px] tracking-wider text-muted-foreground">
+                <th scope="col" className={th}>PLAYER</th>
+                <th scope="col" className={cn(th, 'text-right')}>SHARES</th>
+                <th scope="col" className={cn(th, 'text-right')}>OPEN PRICE</th>
+                <th scope="col" className={cn(th, 'text-right')}>CURRENT</th>
+                <th scope="col" className={cn(th, 'text-right')}>LIQ. PRICE</th>
+                <th scope="col" className={cn(th, 'text-right')}>UNREALIZED P&amp;L</th>
+                <th scope="col" className={cn(th, 'text-right')}>ACTION</th>
+              </tr>
+            </thead>
+            <tbody className="font-mono text-sm">
+              {shortPositions.map((s) => {
+                const p = byId.get(s.playerId)
+                if (!p) return null
+                const pnl = (s.openPrice - p.price) * s.shares
+                const pnlPct = ((s.openPrice - p.price) / s.openPrice) * 100
+                return (
+                  <tr key={s.id} className="border-b border-border/60 last:border-0">
+                    <td className={cn(td, 'font-sans font-medium text-foreground')}>{p.name}</td>
+                    <td className={cn(td, 'text-right tabular-nums')}>{s.shares}</td>
+                    <td className={cn(td, 'text-right tabular-nums text-muted-foreground')}>{formatNumber(s.openPrice)}</td>
+                    <td className={cn(td, 'text-right tabular-nums')}>{formatNumber(p.price)}</td>
+                    <td className={cn(td, 'text-right tabular-nums text-loss')}>{formatUSD(s.liquidationPrice)}</td>
+                    <td className={cn(td, 'text-right tabular-nums', pnl >= 0 ? 'text-gain' : 'text-loss')}>
+                      {pnl >= 0 ? '+' : '-'}{formatUSD(Math.abs(pnl))} / {formatPct(pnlPct)}
+                    </td>
+                    <td className={cn(td, 'text-right')}>
+                      <button
+                        type="button"
+                        onClick={() => onQuickCover?.(s.playerId)}
+                        className="rounded-sm border border-sky-500/40 bg-sky-500/10 px-3 py-1 font-sans text-xs font-semibold text-sky-400 transition-colors hover:bg-sky-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Cover
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+              {shortPositions.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center font-sans text-sm text-muted-foreground">
+                    No open short positions.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+
+        {tab === 'audit' && (
           <table id="panel-audit" role="tabpanel" aria-labelledby="tab-audit" className="w-full text-left">
             <thead>
               <tr className="border-b border-border font-mono text-[10px] tracking-wider text-muted-foreground">
@@ -114,8 +187,9 @@ export function PortfolioPanel({ players, holdings, trades, onQuickSell, title }
                 <th scope="col" className={th}>TYPE</th>
                 <th scope="col" className={th}>PLAYER</th>
                 <th scope="col" className={cn(th, 'text-right')}>SHARES</th>
-                <th scope="col" className={cn(th, 'text-right')}>EXECUTION PRICE</th>
-                <th scope="col" className={cn(th, 'text-right')}>FEE PAID</th>
+                <th scope="col" className={cn(th, 'text-right')}>PRICE</th>
+                <th scope="col" className={cn(th, 'text-right')}>LEVERAGE</th>
+                <th scope="col" className={cn(th, 'text-right')}>FEE</th>
                 <th scope="col" className={cn(th, 'text-right')}>STATUS</th>
               </tr>
             </thead>
@@ -124,16 +198,16 @@ export function PortfolioPanel({ players, holdings, trades, onQuickSell, title }
                 <tr key={t.id} className="border-b border-border/60 last:border-0">
                   <td className={cn(td, 'text-xs text-muted-foreground tabular-nums')}>{t.timestamp}</td>
                   <td className={td}>
-                    <span className={cn(
-                      'rounded-sm px-1.5 py-0.5 text-[10px] font-bold',
-                      t.side === 'BUY' ? 'bg-gain/15 text-gain' : 'bg-loss/15 text-loss',
-                    )}>
+                    <span className={cn('rounded-sm px-1.5 py-0.5 text-[10px] font-bold', SIDE_COLOR[t.side] ?? 'bg-secondary text-foreground')}>
                       {t.side}
                     </span>
                   </td>
                   <td className={cn(td, 'font-sans text-foreground')}>{byId.get(t.playerId)?.name ?? t.playerId}</td>
                   <td className={cn(td, 'text-right tabular-nums')}>{t.shares}</td>
                   <td className={cn(td, 'text-right tabular-nums')}>{formatUSD(t.price)}</td>
+                  <td className={cn(td, 'text-right tabular-nums')}>
+                    {(t.leverage ?? 1) > 1 ? <span className="text-amber-400">{t.leverage}×</span> : '1×'}
+                  </td>
                   <td className={cn(td, 'text-right tabular-nums text-muted-foreground')}>{formatUSD(t.fee)}</td>
                   <td className={cn(td, 'text-right')}>
                     <span className="text-[10px] font-semibold tracking-wider text-gain">{t.status}</span>
@@ -142,7 +216,7 @@ export function PortfolioPanel({ players, holdings, trades, onQuickSell, title }
               ))}
               {trades.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center font-sans text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-8 text-center font-sans text-sm text-muted-foreground">
                     No trades yet.
                   </td>
                 </tr>
@@ -150,6 +224,7 @@ export function PortfolioPanel({ players, holdings, trades, onQuickSell, title }
             </tbody>
           </table>
         )}
+
       </div>
     </section>
   )

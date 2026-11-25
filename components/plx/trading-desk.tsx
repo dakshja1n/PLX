@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { executeTrade, fetchHoldings, fetchPlayers, fetchPortfolio, fetchProfile, fetchTrades } from '@/lib/supabase/queries'
+import { coverShort, executeTrade, fetchHoldings, fetchPlayers, fetchPortfolio, fetchProfile, fetchShortPositions, fetchTrades, openShort } from '@/lib/supabase/queries'
 import {
   INITIAL_PLAYERS,
   type ChartPoint,
   type Holding,
   type Player,
+  type ShortPosition,
   type Timeframe,
   type Trade,
   type TradeSide,
@@ -43,6 +44,9 @@ function dbHoldingToHolding(h: Record<string, unknown>): Holding {
     playerId: h.player_id as string,
     shares: Number(h.shares),
     avgPrice: Number(h.avg_cost),
+    leverage: Number(h.leverage ?? 1),
+    borrowedAmount: Number(h.borrowed_amount ?? 0),
+    liquidationPrice: Number(h.liquidation_price ?? 0),
   }
 }
 
@@ -55,7 +59,20 @@ function dbTradeToTrade(t: Record<string, unknown>): Trade {
     shares: Number(t.shares),
     price: Number(t.price),
     fee: Number(t.fee),
+    leverage: Number(t.leverage ?? 1),
     status: 'FILLED',
+  }
+}
+
+function dbShortToShort(s: Record<string, unknown>): ShortPosition {
+  return {
+    id: s.id as string,
+    playerId: s.player_id as string,
+    shares: Number(s.shares),
+    openPrice: Number(s.open_price),
+    collateral: Number(s.collateral),
+    liquidationPrice: Number(s.liquidation_price),
+    openedAt: formatTimestamp(new Date(s.opened_at as string)),
   }
 }
 
@@ -65,9 +82,11 @@ export function TradingDesk() {
   const [selectedId, setSelectedId] = useState<string | null>(INITIAL_PLAYERS[0]?.id ?? null)
   const [cash, setCash] = useState(10_000)
   const [holdings, setHoldings] = useState<Holding[]>([])
+  const [shortPositions, setShortPositions] = useState<ShortPosition[]>([])
   const [trades, setTrades] = useState<Trade[]>([])
   const [side, setSide] = useState<TradeSide>('BUY')
   const [sharesInput, setSharesInput] = useState('1')
+  const [leverage, setLeverage] = useState(1)
   const [timeframe, setTimeframe] = useState<Timeframe>('1D')
   const [notice, setNotice] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
@@ -78,11 +97,12 @@ export function TradingDesk() {
 
   const reload = useCallback(async (uid: string) => {
     try {
-      const [dbPlayers, portfolio, dbHoldings, dbTrades] = await Promise.all([
+      const [dbPlayers, portfolio, dbHoldings, dbTrades, dbShorts] = await Promise.all([
         fetchPlayers(),
         fetchPortfolio(uid),
         fetchHoldings(uid),
         fetchTrades(uid),
+        fetchShortPositions(uid),
       ])
       if (dbPlayers && dbPlayers.length > 0) {
         const mapped = dbPlayers.map(dbPlayerToPlayer)
@@ -92,6 +112,7 @@ export function TradingDesk() {
       setCash(portfolio?.cash ?? 10_000)
       setHoldings((dbHoldings ?? []).map(dbHoldingToHolding))
       setTrades((dbTrades ?? []).map(dbTradeToTrade))
+      setShortPositions((dbShorts ?? []).map(dbShortToShort))
     } catch {
       // keep seed data if DB not yet set up
     }
@@ -143,13 +164,24 @@ export function TradingDesk() {
     setSelectedId(id)
     setSharesInput('1')
     setNotice(null)
+    setLeverage(1)
     setSide((prev) => prev === 'SELL' ? 'BUY' : prev)
   }
 
   const quickSell = (id: string) => {
     setSelectedId(id)
     setSide('SELL')
+    setLeverage(1)
     setSharesInput(String(holdings.find((h) => h.playerId === id)?.shares ?? 0))
+    setNotice(null)
+    setMode('spot')
+  }
+
+  const quickCover = (id: string) => {
+    setSelectedId(id)
+    setSide('COVER')
+    setLeverage(1)
+    setSharesInput(String(shortPositions.find(s => s.playerId === id)?.shares ?? 0))
     setNotice(null)
     setMode('spot')
   }
@@ -159,8 +191,18 @@ export function TradingDesk() {
     const shares = Number.parseInt(sharesInput, 10)
     if (!shares || shares <= 0) return
     try {
-      await executeTrade(player.id, side, shares, player.price)
-      setNotice(`${side === 'BUY' ? 'Bought' : 'Sold'} ${shares} × ${player.tickerName} @ $${player.price.toFixed(2)} — FILLED`)
+      if (side === 'SHORT') {
+        await openShort(player.id, shares, player.price)
+        setNotice(`Opened short: ${shares} × ${player.tickerName} @ ${player.price.toFixed(2)} — FILLED`)
+      } else if (side === 'COVER') {
+        const sp = shortPositions.find(s => s.playerId === player.id)
+        if (!sp) { setNotice('No open short for this player'); return }
+        await coverShort(sp.id, shares, player.price)
+        setNotice(`Covered ${shares} × ${player.tickerName} @ ${player.price.toFixed(2)} — FILLED`)
+      } else {
+        await executeTrade(player.id, side, shares, player.price, side === 'BUY' ? leverage : 1)
+        setNotice(`${side === 'BUY' ? 'Bought' : 'Sold'} ${shares} × ${player.tickerName} @ $${player.price.toFixed(2)}${side === 'BUY' && leverage > 1 ? ` (${leverage}×)` : ''} — FILLED`)
+      }
       await reload(userId)
       setSharesInput('1')
     } catch (err: unknown) {
@@ -191,12 +233,14 @@ export function TradingDesk() {
             players={players}
             holdings={holdings}
             trades={trades}
+            shortPositions={shortPositions}
             cash={cash}
             holdingsValue={holdingsValue}
             pnl24h={pnl24h}
             displayName={displayName}
             onModeChange={setMode}
             onQuickSell={quickSell}
+            onQuickCover={quickCover}
           />
         )}
 
@@ -218,11 +262,14 @@ export function TradingDesk() {
               <OrderTicket
                 player={player}
                 side={side}
-                onSideChange={(s) => { setSide(s); setNotice(null) }}
+                onSideChange={(s) => { setSide(s); setNotice(null); setLeverage(1) }}
                 sharesInput={sharesInput}
                 onSharesChange={setSharesInput}
+                leverage={leverage}
+                onLeverageChange={setLeverage}
                 cash={cash}
                 ownedShares={ownedShares}
+                shortPositions={shortPositions.filter(s => s.playerId === player.id)}
                 onExecute={execute}
                 notice={notice}
               />
