@@ -118,3 +118,14 @@ export async function coverShort(shortId: string, shares: number, price: number)
   if (error) throw error
   return data
 }
+
+export async function fetchPriceHistory(playerId: string, limit = 90) {
+  const { data, error } = await supabase
+    .from('price_history')
+    .select('price, recorded_at')
+    .eq('player_id', playerId)
+    .order('recorded_at', { ascending: true })
+    .limit(limit)
+  if (error) throw error
+  return (data ?? []) as { price: number; recorded_at: string }[]
+}

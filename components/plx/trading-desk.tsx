@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { coverShort, executeTrade, fetchHoldings, fetchPlayers, fetchPortfolio, fetchProfile, fetchShortPositions, fetchTrades, openShort } from '@/lib/supabase/queries'
+import { coverShort, executeTrade, fetchHoldings, fetchPlayers, fetchPortfolio, fetchProfile, fetchPriceHistory, fetchShortPositions, fetchTrades, openShort } from '@/lib/supabase/queries'
 import {
   INITIAL_PLAYERS,
   type ChartPoint,
@@ -92,8 +92,25 @@ export function TradingDesk() {
   const [userId, setUserId] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState<string>('Trader')
   const [loading, setLoading] = useState(true)
-  const [priceHistoryCache] = useState<Map<string, ChartPoint[]>>(new Map())
+  const [priceHistoryCache, setPriceHistoryCache] = useState<Map<string, ChartPoint[]>>(new Map())
   const fetchingHistory = useRef<Set<string>>(new Set())
+
+  const loadPriceHistory = useCallback(async (playerId: string) => {
+    if (fetchingHistory.current.has(playerId)) return
+    fetchingHistory.current.add(playerId)
+    try {
+      const rows = await fetchPriceHistory(playerId, 90)
+      if (rows.length >= 2) {
+        const points: ChartPoint[] = rows.map(r => ({
+          label: r.recorded_at.slice(0, 10),
+          price: Number(r.price),
+        }))
+        setPriceHistoryCache(prev => new Map(prev).set(playerId, points))
+      }
+    } catch {
+      // fall back to generated data
+    }
+  }, [])
 
   const reload = useCallback(async (uid: string) => {
     try {
@@ -147,6 +164,11 @@ export function TradingDesk() {
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [])
+
+  // Load real price history when player changes
+  useEffect(() => {
+    if (selectedId) loadPriceHistory(selectedId)
+  }, [selectedId, loadPriceHistory])
 
   const player = players.find((p) => p.id === selectedId) ?? players[0]
   const ownedShares = holdings.find((h) => h.playerId === player?.id)?.shares ?? 0

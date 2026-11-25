@@ -193,5 +193,38 @@ export async function runUpdate(options: {
   }
 
   if (log) console.log(`\n\nDone. Updated: ${updated}, Errors: ${errors}`)
+
+  // Liquidate underwater leveraged longs
+  const { data: toLiquidate } = await supabase
+    .from('holdings')
+    .select('user_id, player_id, liquidation_price, players(price)')
+    .gt('liquidation_price', 0)
+
+  let liquidations = 0
+  for (const h of toLiquidate ?? []) {
+    const players = h.players as unknown as { price: number } | null
+    const currentPrice = Number(players?.price ?? 0)
+    if (currentPrice <= Number(h.liquidation_price)) {
+      await supabase.rpc('liquidate_position', { p_user_id: h.user_id, p_player_id: h.player_id })
+      liquidations++
+    }
+  }
+
+  // Liquidate underwater shorts (price rose above liquidation_price)
+  const { data: toShortLiq } = await supabase
+    .from('short_positions')
+    .select('id, user_id, liquidation_price, players(price)')
+
+  for (const s of toShortLiq ?? []) {
+    const players2 = s.players as unknown as { price: number } | null
+    const currentPrice = Number(players2?.price ?? 0)
+    if (currentPrice >= Number(s.liquidation_price)) {
+      await supabase.rpc('liquidate_short', { p_user_id: s.user_id, p_short_id: s.id })
+      liquidations++
+    }
+  }
+
+  if (log && liquidations > 0) console.log(`Liquidated: ${liquidations} positions`)
+
   return { updated, errors, date: today }
 }
