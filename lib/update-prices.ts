@@ -4,7 +4,6 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-// Competition weights — K factor applied to performance delta (not yet implemented).
 export const COMPETITION_WEIGHTS: Record<number, number> = {
   47:   1.2,  // Premier League
   42:   1.5,  // UEFA Champions League
@@ -16,37 +15,79 @@ export const COMPETITION_WEIGHTS: Record<number, number> = {
 }
 const DEFAULT_WEIGHT = 0.5
 
-/**
- * STUB: Performance delta calculation.
- *
- * Returns 0 until metrics and magnitudes are decided by the owner.
- * Replace the body of this function when ready — the signature and
- * all inputs are already wired up.
- *
- * @param match - FotMob recentMatches entry for one game
- * @param competitionWeight - K factor for this competition
- * @returns price delta as a decimal fraction of current price (e.g. 0.02 = +2%)
- *
- * Available fields on `match`:
- *   match.goals           — goals scored
- *   match.assists         — assists
- *   match.yellowCards     — yellow cards
- *   match.redCards        — red cards
- *   match.minutesPlayed   — minutes on pitch
- *   match.ratingProps.rating — FotMob rating string ("6.5", "8.0", …)
- *   match.playerOfTheMatch — boolean
- *   match.homeScore / match.awayScore — final score
- *   match.isHomeTeam      — was this player's team at home
- *   match.onBench         — was player an unused substitute
- */
+// lineupPositionId ranges: 1xx = GK, 2xx = DEF, 3xx = MID, 4xx = FWD
+function positionBucket(lineupPositionId: unknown): 'GK' | 'DEF' | 'MID' | 'FWD' {
+  const id = Number(lineupPositionId ?? 0)
+  if (id >= 100 && id < 200) return 'GK'
+  if (id >= 200 && id < 300) return 'DEF'
+  if (id >= 300 && id < 400) return 'MID'
+  if (id >= 400 && id < 500) return 'FWD'
+  return 'MID'
+}
+
+function ratingMultiplier(ratingStr: unknown): number {
+  const r = parseFloat(String(ratingStr ?? '6.5'))
+  if (r >= 8.0) return 1.3
+  if (r >= 7.0) return 1.1
+  if (r >= 6.0) return 1.0
+  if (r >= 5.0) return 0.85
+  return 0.7
+}
+
+// @returns price delta as a decimal fraction (e.g. 0.025 = +2.5%)
 export function computePerformanceDelta(
   match: Record<string, unknown>,
   competitionWeight: number,
 ): number {
-  // TODO: implement metric scoring
-  void match
-  void competitionWeight
-  return 0
+  const pos = positionBucket(match.lineupPositionId)
+  const goals   = Number(match.goals ?? 0)
+  const assists = Number(match.assists ?? 0)
+  const yellows = Number(match.yellowCards ?? 0)
+  const reds    = Number(match.redCards ?? 0)
+  const minutes = Number(match.minutesPlayed ?? 0)
+  const potm    = Boolean(match.playerOfTheMatch)
+
+  const homeScore = Number(match.homeScore ?? 0)
+  const awayScore = Number(match.awayScore ?? 0)
+  const isHome    = Boolean(match.isHomeTeam)
+  const teamScore = isHome ? homeScore : awayScore
+  const oppScore  = isHome ? awayScore : homeScore
+  const won  = teamScore > oppScore
+  const drew = teamScore === oppScore
+  const cleanSheet = oppScore === 0
+
+  const rating = (match.ratingProps as Record<string, unknown> | undefined)?.rating
+
+  // --- base points by event ---
+  const goalPts: Record<string, number>   = { GK: 8, DEF: 6, MID: 4, FWD: 5 }
+  const assistPts: Record<string, number> = { GK: 3, DEF: 3, MID: 3, FWD: 3 }
+  const csPts: Record<string, number>     = { GK: 4, DEF: 3, MID: 1, FWD: 0 }
+  const winPts: Record<string, number>    = { GK: 2, DEF: 2, MID: 1, FWD: 1 }
+  const lossPts: Record<string, number>   = { GK: -2, DEF: -2, MID: -1, FWD: -1 }
+
+  let points = 0
+
+  points += goals   * goalPts[pos]
+  points += assists * assistPts[pos]
+  points -= yellows * 1.5
+  points -= reds    * 5
+
+  if (cleanSheet) points += csPts[pos]
+  if (won)        points += winPts[pos]
+  if (!won && !drew) points += lossPts[pos]
+
+  // full 90 bonus / early sub penalty
+  if (minutes >= 88) points += 0.5
+  else if (minutes < 60 && minutes > 0) points -= 0.5
+
+  // apply rating multiplier
+  points *= ratingMultiplier(rating)
+
+  // flat POTM bonus after multiplier
+  if (potm) points += 3
+
+  // convert to price delta fraction: points / 10 × competition weight
+  return (points / 10) * competitionWeight
 }
 
 function deriveStatus(data: Record<string, unknown>): 'active' | 'injured' | 'suspended' {
