@@ -4,6 +4,11 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { type ChartPoint, formatUSD } from '@/lib/market-data'
 
 export function PriceChart({ data }: { data: ChartPoint[] }) {
+  const prices = data.map(d => d.price)
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  const pad = max === min ? min * 0.02 || 1 : 0
+  const domain: [number, number] = [min - 4 - pad, max + 4 + pad]
   return (
     <div className="h-full min-h-0 w-full flex-1" role="img" aria-label="Player price history chart">
       <ResponsiveContainer width="100%" height="100%">
@@ -24,7 +29,7 @@ export function PriceChart({ data }: { data: ChartPoint[] }) {
           />
           <YAxis
             orientation="right"
-            domain={['dataMin - 4', 'dataMax + 4']}
+            domain={domain}
             tick={{ fill: '#8391a7', fontSize: 10, fontFamily: 'var(--font-geist-mono)' }}
             tickLine={false}
             axisLine={false}

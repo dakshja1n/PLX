@@ -17,6 +17,7 @@ export function PlayerDetail({ player, timeframe, onTimeframeChange, priceHistor
   const pnl = player.price - player.open
   const flatLine: ChartPoint[] = [
     { label: 'Base', price: player.price },
+    { label: 'Mid',  price: player.price },
     { label: 'Now',  price: player.price },
   ]
   const data: ChartPoint[] = priceHistory && priceHistory.length >= 2 ? priceHistory : flatLine

@@ -12,7 +12,6 @@ import {
   type Timeframe,
   type Trade,
   type TradeSide,
-  buildHistory,
   formatTimestamp,
 } from '@/lib/market-data'
 import { HeaderBar } from './header-bar'
@@ -244,8 +243,8 @@ export function TradingDesk() {
 
   if (!player) return null
 
-  // Use generated chart history (no DB history yet)
-  const priceHistory = priceHistoryCache.get(`${player.id}:${timeframe}`) ?? buildHistory(player, timeframe)
+  // Use flat line at current price when no real history exists yet
+  const priceHistory = priceHistoryCache.get(`${player.id}:${timeframe}`) ?? undefined
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background font-sans text-foreground">

@@ -91,7 +91,8 @@ export function computePerformanceDelta(
 }
 
 function deriveStatus(data: Record<string, unknown>): 'active' | 'injured' | 'suspended' {
-  if (data?.injuryInformation) return 'injured'
+  const injury = data?.injuryInformation as Record<string, unknown> | undefined
+  if (injury?.isInjured === true) return 'injured'
   const s = data?.status
   if (s === 'injured') return 'injured'
   if (s === 'suspended') return 'suspended'
