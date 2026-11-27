@@ -66,7 +66,7 @@ export function LeaderboardView({ userId, displayName, onDisplayNameChange }: Pr
         <div>
           <p className="font-mono text-[10px] tracking-widest text-gain">LIVE RANKINGS</p>
           <h1 className="mt-1 text-xl font-semibold tracking-tight text-foreground">Leaderboard</h1>
-          <p className="mt-0.5 text-xs text-muted-foreground">Ranked by net worth — cash plus current market value of all holdings.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Ranked by net worth: cash plus current market value of all holdings.</p>
         </div>
         {myRank && (
           <div className="text-right">

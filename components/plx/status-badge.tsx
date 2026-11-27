@@ -10,7 +10,7 @@ export function StatusBadge({ status, compact = false }: { status: PlayerStatus;
         title="Injured"
       >
         <AlertTriangle className="size-3" aria-hidden="true" />
-        {compact ? 'Injured' : 'Injured'}
+        {compact ? 'INJ' : 'Injured'}
       </span>
     )
   }

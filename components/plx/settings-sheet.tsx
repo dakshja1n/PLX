@@ -16,7 +16,7 @@ export function SettingsSheet({ cash, displayName }: { cash: number; displayName
       <SheetContent side="left" className="w-80 border-border bg-panel">
         <SheetHeader className="border-b border-border">
           <SheetTitle className="font-mono text-xs tracking-widest">ACCOUNT &amp; SETTINGS</SheetTitle>
-          <SheetDescription className="text-xs">{displayName} · Verified trader</SheetDescription>
+          <SheetDescription className="text-xs">{displayName}</SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-3 overflow-y-auto px-4 pb-4">
           <section className="rounded-md border border-border bg-card p-3">

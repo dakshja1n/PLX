@@ -26,14 +26,19 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [])
 
   if (loading) return (
-    <div className="flex h-screen items-center justify-center bg-background text-foreground">
-      Loading...
+    <div
+      className="flex h-screen items-center justify-center bg-background text-foreground"
+      role="status"
+      aria-live="polite"
+    >
+      <span className="font-mono text-sm text-muted-foreground">Loading...</span>
     </div>
   )
 
   if (user) return <>{children}</>
 
-  const submit = async () => {
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     setSubmitting(true)
     setError(null)
     const fn = mode === 'signin' ? signIn : signUp
@@ -44,40 +49,52 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen items-center justify-center bg-background text-foreground">
-      <div className="w-full max-w-sm space-y-4 rounded-lg border border-border p-8">
+      <div className="w-full max-w-sm rounded-lg border border-border p-8">
         <h1 className="text-xl font-semibold">Pl<span className="text-gain">X</span></h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           {mode === 'signin' ? 'Sign in to your account' : 'Create a new account'}
         </p>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
-          className="w-full rounded border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-        />
-        {error && <p className="text-xs text-red-500">{error}</p>}
-        <button
-          onClick={submit}
-          disabled={submitting}
-          className="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-        >
-          {submitting ? 'Please wait...' : mode === 'signin' ? 'Sign In' : 'Sign Up'}
-        </button>
-        <button
-          onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null) }}
-          className="w-full text-xs text-muted-foreground hover:text-foreground"
-        >
-          {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-        </button>
+        <form onSubmit={submit} noValidate className="mt-5 flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="auth-email" className="text-xs font-medium text-muted-foreground">Email</label>
+            <input
+              id="auth-email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="auth-password" className="text-xs font-medium text-muted-foreground">Password</label>
+            <input
+              id="auth-password"
+              type="password"
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          {error && (
+            <p role="alert" className="text-xs text-loss">{error}</p>
+          )}
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {submitting ? 'Please wait...' : mode === 'signin' ? 'Sign in' : 'Create account'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null) }}
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {mode === 'signin' ? "No account? Sign up" : 'Have an account? Sign in'}
+          </button>
+        </form>
       </div>
     </div>
   )

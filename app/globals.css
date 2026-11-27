@@ -49,7 +49,7 @@
   --secondary: #161e2e;
   --secondary-foreground: #e8eaf0;
   --muted: #131929;
-  --muted-foreground: #6b7a94;
+  --muted-foreground: #8899b4;
   --accent: #161e2e;
   --accent-foreground: #e8eaf0;
   --destructive: #dc2626;
@@ -71,6 +71,20 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  summary,
+  label[for],
+  select {
+    cursor: pointer;
+  }
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  input:disabled,
+  select:disabled {
+    cursor: not-allowed;
   }
 }
 
