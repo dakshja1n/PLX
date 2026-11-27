@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { type ChartPoint, type Player, type Timeframe, TIMEFRAMES, changePct, formatPct, formatUSD } from '@/lib/market-data'
 import { cn } from '@/lib/utils'
 import { PriceChart } from './price-chart'
+import { PlayerStats } from './player-stats'
 import { StatusBadge } from './status-badge'
 
 type PlayerDetailProps = {
@@ -13,6 +15,7 @@ type PlayerDetailProps = {
 }
 
 export function PlayerDetail({ player, timeframe, onTimeframeChange, priceHistory }: PlayerDetailProps) {
+  const [view, setView] = useState<'chart' | 'stats'>('chart')
   const pct = changePct(player)
   const pnl = player.price - player.open
   const flatLine: ChartPoint[] = [
@@ -74,30 +77,61 @@ export function PlayerDetail({ player, timeframe, onTimeframeChange, priceHistor
         </dl>
       </div>
 
-      {/* Timeframe selector — right-aligned, minimal */}
-      <div className="flex shrink-0 items-center justify-end gap-0.5 px-4 pt-2 pb-0">
-        {TIMEFRAMES.map((tf) => (
-          <button
-            key={tf}
-            type="button"
-            onClick={() => onTimeframeChange(tf)}
-            aria-pressed={tf === timeframe}
-            className={cn(
-              'rounded-sm px-2 py-1 font-mono text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              tf === timeframe
-                ? 'text-foreground bg-secondary'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {tf}
-          </button>
-        ))}
+      {/* Chart / Stats tab switcher */}
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-4" role="tablist" aria-label="Player view">
+        <div className="flex">
+          {(['chart', 'stats'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => setView(v)}
+              className={cn(
+                'relative flex h-9 items-center px-3 font-mono text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring capitalize',
+                view === v
+                  ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[1.5px] after:bg-gain'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+
+        {/* Timeframe selector — only visible on chart tab */}
+        {view === 'chart' && (
+          <div className="flex gap-0.5">
+            {TIMEFRAMES.map((tf) => (
+              <button
+                key={tf}
+                type="button"
+                onClick={() => onTimeframeChange(tf)}
+                aria-pressed={tf === timeframe}
+                className={cn(
+                  'rounded-sm px-2 py-1 font-mono text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  tf === timeframe
+                    ? 'text-foreground bg-secondary'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {tf}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Chart — fills remaining space */}
-      <div className="flex min-h-0 flex-1 px-1 pt-1 pb-2">
-        <PriceChart data={data} />
-      </div>
+      {/* Content — chart or stats */}
+      {view === 'chart' ? (
+        <div className="flex min-h-0 flex-1 px-1 pt-1 pb-2">
+          <PriceChart data={data} />
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <PlayerStats playerId={player.id} />
+        </div>
+      )}
     </section>
   )
 }

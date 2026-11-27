@@ -108,6 +108,32 @@ function hashString(value: string) {
 
 export type ChartPoint = { label: string; price: number }
 
+export type PerformanceMatchData = {
+  opponent: string
+  result: string
+  goals: number
+  assists: number
+  rating: number
+  minutes: number
+  clean_sheet: boolean
+  yellow_card: boolean
+  red_card: boolean
+  potm: boolean
+}
+
+export type PerformanceHistoryRow = {
+  id: string
+  player_id: string
+  recorded_at: string
+  price_before: number
+  price_after: number
+  performance_delta_pct: number
+  demand_delta_pct: number | null
+  raw_points: number
+  competition_weight: number
+  match_data: PerformanceMatchData | null
+}
+
 export function buildHistory(player: Player, timeframe: Timeframe): ChartPoint[] {
   const { points, volatility, label } = TIMEFRAME_CONFIG[timeframe]
   const rand = seededRandom(hashString(player.id + timeframe))

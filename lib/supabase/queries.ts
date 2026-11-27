@@ -1,4 +1,5 @@
 import { supabase } from './client'
+import type { PerformanceHistoryRow } from '@/lib/market-data'
 
 export async function fetchPlayers() {
   const { data, error } = await supabase
@@ -147,4 +148,13 @@ const TIMEFRAME_LIMIT: Record<string, number> = {
 
 export function timeframeLimit(tf: string): number {
   return TIMEFRAME_LIMIT[tf] ?? 90
+}
+
+export async function fetchPlayerPerformanceHistory(playerId: string, limit = 30): Promise<PerformanceHistoryRow[]> {
+  const { data, error } = await supabase.rpc('get_player_performance_history', {
+    p_player_id: playerId,
+    p_limit: limit,
+  })
+  if (error) throw error
+  return (data ?? []) as PerformanceHistoryRow[]
 }

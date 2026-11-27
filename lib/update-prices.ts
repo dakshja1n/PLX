@@ -151,6 +151,9 @@ export async function runUpdate(options: {
 
       const previousPrice = Number(player.price)
       let priceDelta = 0
+      let bestMatchData: Record<string, unknown> | null = null
+      let bestWeight = 0
+      let bestPoints = 0
 
       const recentMatches = (data.recentMatches as Record<string, unknown>[] | undefined) ?? []
       const todayMatches = recentMatches.filter(m => {
@@ -161,7 +164,14 @@ export async function runUpdate(options: {
       for (const match of todayMatches) {
         const leagueId = match.leagueId as number
         const weight = COMPETITION_WEIGHTS[leagueId] ?? DEFAULT_WEIGHT
-        priceDelta += computePerformanceDelta(match, weight)
+        const delta = computePerformanceDelta(match, weight)
+        priceDelta += delta
+        // Track the highest-weight match for the history row
+        if (weight >= bestWeight) {
+          bestWeight = weight
+          bestMatchData = match
+          bestPoints = (delta / weight) * 10
+        }
       }
 
       const newPrice = Math.max(previousPrice * (1 + priceDelta), 0.01)
@@ -184,6 +194,46 @@ export async function runUpdate(options: {
       await supabase
         .from('price_history')
         .insert({ player_id: player.id, price: roundedPrice })
+
+      // Persist performance history row (non-blocking — never breaks price update)
+      if (todayMatches.length > 0 && bestMatchData) {
+        try {
+          const m = bestMatchData
+          const homeScore = Number(m.homeScore ?? 0)
+          const awayScore = Number(m.awayScore ?? 0)
+          const isHome    = Boolean(m.isHomeTeam)
+          const teamScore = isHome ? homeScore : awayScore
+          const oppScore  = isHome ? awayScore : homeScore
+          const won  = teamScore > oppScore
+          const drew = teamScore === oppScore
+          const resultStr = `${teamScore}-${oppScore} ${won ? 'W' : drew ? 'D' : 'L'}`
+          const opponentName = String((m.opponentTeam as Record<string, unknown> | undefined)?.name ?? (m.teamName ?? 'Unknown'))
+
+          await supabase.from('player_performance_history').insert({
+            player_id:             player.id,
+            price_before:          previousPrice,
+            price_after:           roundedPrice,
+            performance_delta_pct: priceDelta,
+            demand_delta_pct:      null,
+            raw_points:            Math.round(bestPoints * 100) / 100,
+            competition_weight:    bestWeight,
+            match_data: {
+              opponent:    opponentName,
+              result:      resultStr,
+              goals:       Number(m.goals ?? 0),
+              assists:     Number(m.assists ?? 0),
+              rating:      parseFloat(String((m.ratingProps as Record<string, unknown> | undefined)?.rating ?? 0)),
+              minutes:     Number(m.minutesPlayed ?? 0),
+              clean_sheet: oppScore === 0 && ['GK', 'DEF', 'MID'].includes(positionBucket(m.lineupPositionId)),
+              yellow_card: Number(m.yellowCards ?? 0) > 0,
+              red_card:    Number(m.redCards ?? 0) > 0,
+              potm:        Boolean(m.playerOfTheMatch),
+            },
+          })
+        } catch (histErr) {
+          console.error(`Performance history insert failed for ${player.name}:`, histErr)
+        }
+      }
 
       updated++
     } catch {
