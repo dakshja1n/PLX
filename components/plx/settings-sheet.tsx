@@ -1,7 +1,8 @@
 'use client'
 
-import { Menu, ScrollText, Wallet } from 'lucide-react'
+import { LogOut, Menu, ScrollText, Wallet } from 'lucide-react'
 import { FEE_RATE, formatUSD } from '@/lib/market-data'
+import { signOut } from '@/lib/supabase/auth'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 
 export function SettingsSheet({ cash, displayName }: { cash: number; displayName: string }) {
@@ -41,6 +42,17 @@ export function SettingsSheet({ cash, displayName }: { cash: number; displayName
               <li>Prices update as match results come in.</li>
             </ul>
           </section>
+        </div>
+
+        <div className="mt-auto border-t border-border px-4 pt-4 pb-4">
+          <button
+            type="button"
+            onClick={() => signOut()}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <LogOut className="size-4" aria-hidden="true" />
+            Sign out
+          </button>
         </div>
       </SheetContent>
     </Sheet>
