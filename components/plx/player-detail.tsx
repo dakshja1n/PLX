@@ -1,7 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
-import { type ChartPoint, type Player, type Timeframe, TIMEFRAMES, buildHistory, changePct, formatPct, formatUSD } from '@/lib/market-data'
+import { type ChartPoint, type Player, type Timeframe, TIMEFRAMES, changePct, formatPct, formatUSD } from '@/lib/market-data'
 import { cn } from '@/lib/utils'
 import { PriceChart } from './price-chart'
 import { StatusBadge } from './status-badge'
@@ -16,8 +15,11 @@ type PlayerDetailProps = {
 export function PlayerDetail({ player, timeframe, onTimeframeChange, priceHistory }: PlayerDetailProps) {
   const pct = changePct(player)
   const pnl = player.price - player.open
-  const generatedData = useMemo(() => buildHistory(player, timeframe), [player, timeframe])
-  const data: ChartPoint[] = priceHistory && priceHistory.length >= 2 ? priceHistory : generatedData
+  const flatLine: ChartPoint[] = [
+    { label: 'Base', price: player.price },
+    { label: 'Now',  price: player.price },
+  ]
+  const data: ChartPoint[] = priceHistory && priceHistory.length >= 2 ? priceHistory : flatLine
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card" aria-labelledby="player-name">

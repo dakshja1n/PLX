@@ -85,11 +85,11 @@ export const INITIAL_TRADES: Trade[] = [
 ]
 
 const TIMEFRAME_CONFIG: Record<Timeframe, { points: number; volatility: number; label: (i: number, points: number) => string }> = {
-  '7D':  { points: 7,  volatility: 1.5,  label: (i, n) => { const d = new Date(); d.setDate(d.getDate() - (n - 1 - i)); return `${d.getMonth()+1}/${d.getDate()}` } },
-  '1M':  { points: 30, volatility: 3.0,  label: (i, n) => { const d = new Date(); d.setDate(d.getDate() - (n - 1 - i)); return `${d.getMonth()+1}/${d.getDate()}` } },
-  '3M':  { points: 90, volatility: 5.0,  label: (i, n) => { const d = new Date(); d.setDate(d.getDate() - (n - 1 - i)); return `${d.getMonth()+1}/${d.getDate()}` } },
-  '1Y':  { points: 52, volatility: 8.0,  label: (i) => { const d = new Date(); d.setDate(d.getDate() - (51 - i) * 7); return `${d.getMonth()+1}/${d.getDate()}` } },
-  ALL:   { points: 60, volatility: 15.0, label: (i) => { const d = new Date(); d.setMonth(d.getMonth() - (59 - i)); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}` } },
+  '7D':  { points: 7,  volatility: 1.5,  label: (i, n) => { const d = new Date(); d.setDate(d.getDate() - (n - 1 - i)); return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}` } },
+  '1M':  { points: 30, volatility: 3.0,  label: (i, n) => { const d = new Date(); d.setDate(d.getDate() - (n - 1 - i)); return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}` } },
+  '3M':  { points: 90, volatility: 5.0,  label: (i, n) => { const d = new Date(); d.setDate(d.getDate() - (n - 1 - i)); return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}` } },
+  '1Y':  { points: 52, volatility: 8.0,  label: (i) => { const d = new Date(); d.setDate(d.getDate() - (51 - i) * 7); return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}` } },
+  ALL:   { points: 60, volatility: 15.0, label: (i) => { const d = new Date(); d.setMonth(d.getMonth() - (59 - i)); return `${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}` } },
 }
 
 function seededRandom(seed: number) {
@@ -135,5 +135,5 @@ export const changePct = (player: Player) => ((player.price - player.open) / pla
 
 export function formatTimestamp(date: Date) {
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }

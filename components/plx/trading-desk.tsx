@@ -103,7 +103,7 @@ export function TradingDesk() {
       const rows = await fetchPriceHistory(playerId, timeframeLimit(tf))
       if (rows.length >= 2) {
         const points: ChartPoint[] = rows.map(r => ({
-          label: r.recorded_at.slice(0, 10),
+          label: r.recorded_at.slice(8, 10) + '.' + r.recorded_at.slice(5, 7),
           price: Number(r.price),
         }))
         setPriceHistoryCache(prev => new Map(prev).set(cacheKey, points))
@@ -132,7 +132,7 @@ export function TradingDesk() {
       setHoldings((dbHoldings ?? []).map(dbHoldingToHolding))
       setTrades((dbTrades ?? []).map(dbTradeToTrade))
       setShortPositions((dbShorts ?? []).map(dbShortToShort))
-      setNetWorthHistory(nwRows.map(r => ({ label: r.recorded_at.slice(0, 10), price: r.net_worth })))
+      setNetWorthHistory(nwRows.map(r => ({ label: r.recorded_at.slice(8, 10) + '.' + r.recorded_at.slice(5, 7), price: r.net_worth })))
     } catch {
       // keep seed data if DB not yet set up
     }
