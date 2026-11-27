@@ -33,6 +33,7 @@ function dbPlayerToPlayer(p: Record<string, unknown>): Player {
     price: Number(p.price),
     open: Number(p.price) - Number(p.price_change_24h ?? 0),
     marketValue: Number(p.market_value ?? 0),
+    netVolume7d: Number(p.net_volume_7d ?? 0),
     status: (p.status as string) === 'injured' ? 'injured' : (p.status as string) === 'suspended' ? 'suspended' : 'active',
   }
 }
@@ -264,6 +265,7 @@ export function TradingDesk() {
             onModeChange={setMode}
             onQuickSell={quickSell}
             onQuickCover={quickCover}
+            onSelectPlayer={selectPlayer}
           />
         )}
 

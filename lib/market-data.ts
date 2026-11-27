@@ -10,6 +10,7 @@ export type Player = {
   price: number
   open: number
   marketValue: number
+  netVolume7d: number
   status: PlayerStatus
 }
 
@@ -53,7 +54,7 @@ export const TIMEFRAMES: Timeframe[] = ['7D', '1M', '3M', '1Y', 'ALL']
 export const FEE_RATE = 0.005
 export const INITIAL_CASH = 10_000
 
-type PlayerSeed = Omit<Player, 'open'> & { change24h: number }
+type PlayerSeed = Omit<Player, 'open' | 'netVolume7d'> & { change24h: number }
 
 const seeds: PlayerSeed[] = [
   { id: 'salah',     name: 'Mohamed Salah',     tickerName: 'SLAH', club: 'Liverpool',      nationality: 'EGY', position: 'RW',  price: 85.00,  change24h:  1.2, status: 'active',    marketValue: 85_000_000 },
@@ -70,6 +71,7 @@ const seeds: PlayerSeed[] = [
 
 export const INITIAL_PLAYERS: Player[] = seeds.map(({ change24h, ...p }) => ({
   ...p,
+  netVolume7d: 0,
   open: Math.round((p.price / (1 + change24h / 100)) * 100) / 100,
 }))
 
