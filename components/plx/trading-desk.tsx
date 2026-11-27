@@ -22,7 +22,6 @@ import { MarketBoard } from './market-board'
 import { MODES, type ModeId } from './modes'
 import { OrderTicket } from './order-ticket'
 import { PlayerDetail } from './player-detail'
-import { RoadmapView } from './roadmap-view'
 
 function dbPlayerToPlayer(p: Record<string, unknown>): Player {
   return {
@@ -237,8 +236,6 @@ export function TradingDesk() {
     }
   }
 
-  const activeMode = MODES.find((m) => m.id === mode) ?? MODES[1]
-
   if (loading) return (
     <div className="flex h-screen items-center justify-center bg-background text-foreground text-sm">
       Loading market data...
@@ -304,7 +301,6 @@ export function TradingDesk() {
           </div>
         )}
 
-        {activeMode.status === 'phase' && <RoadmapView mode={activeMode} onModeChange={setMode} />}
         {mode === 'leaderboard' && (
           <LeaderboardView
             userId={userId}

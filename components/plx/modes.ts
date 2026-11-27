@@ -1,6 +1,6 @@
-import { Gauge, House, Trophy, TrendingUp, type LucideIcon } from 'lucide-react'
+import { House, Trophy, TrendingUp, type LucideIcon } from 'lucide-react'
 
-export type ModeId = 'home' | 'spot' | 'blitz' | 'leaderboard'
+export type ModeId = 'home' | 'spot' | 'leaderboard'
 
 export type ModeConfig = {
   id: ModeId
@@ -33,16 +33,6 @@ export const MODES: ModeConfig[] = [
     icon: TrendingUp,
     title: 'Mode 1: Spot Exchange',
     description: 'Trade Premier League player shares with 0.5% fees.',
-  },
-  {
-    id: 'blitz',
-    short: 'M4',
-    label: 'Blitz CLOB',
-    tag: 'Phase 4',
-    status: 'phase',
-    icon: Gauge,
-    title: 'Mode 4: Wall Street Blitz',
-    description: 'High-frequency Central Limit Order Book. Prices move in real-time as match results come in.',
   },
   {
     id: 'leaderboard',

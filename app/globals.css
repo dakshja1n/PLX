@@ -37,29 +37,32 @@
 
 :root {
   color-scheme: dark;
-  --background: #090d16;
-  --foreground: #e5e7eb;
-  --panel: #0d1320;
-  --card: #111827;
-  --card-foreground: #e5e7eb;
-  --popover: #111827;
-  --popover-foreground: #e5e7eb;
-  --primary: #22c55e;
-  --primary-foreground: #04130a;
-  --secondary: #1a2333;
-  --secondary-foreground: #e5e7eb;
-  --muted: #161e2d;
-  --muted-foreground: #8391a7;
-  --accent: #1a2333;
-  --accent-foreground: #f3f4f6;
-  --destructive: #ef4444;
-  --border: #1f2937;
-  --input: #253045;
-  --ring: #22c55e;
+  --background: #080c14;
+  --foreground: #e8eaf0;
+  --panel: #0c1120;
+  --card: #0f1521;
+  --card-foreground: #e8eaf0;
+  --popover: #0f1521;
+  --popover-foreground: #e8eaf0;
+  --primary: #16a34a;
+  --primary-foreground: #f0fdf4;
+  --secondary: #161e2e;
+  --secondary-foreground: #e8eaf0;
+  --muted: #131929;
+  --muted-foreground: #6b7a94;
+  --accent: #161e2e;
+  --accent-foreground: #e8eaf0;
+  --destructive: #dc2626;
+  --border: #1a2235;
+  --input: #1e2d42;
+  --ring: #16a34a;
+  /* semantic data colors — only used for P&L and status, not chrome */
   --gain: #22c55e;
-  --loss: #ef4444;
-  --lock: #eab308;
-  --radius: 0.5rem;
+  --loss: #f43f5e;
+  --lock: #f59e0b;
+  /* nav active indicator — subtler than gain */
+  --nav-active: #22c55e;
+  --radius: 0.375rem;
 }
 
 @layer base {
